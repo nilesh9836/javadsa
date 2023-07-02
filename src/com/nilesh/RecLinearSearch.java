@@ -9,7 +9,8 @@ public class RecLinearSearch {
     }
     static ArrayList linearSearch(int[] arr, int t) {
         ArrayList<Integer> list = new ArrayList<>();
-        return helper2(arr,t,0, list);
+        //return helper2(arr,t,0, list);
+        return findAllIndex(arr,t,0);
     }
     static int helper(int[] arr,int t ,int c)  {
         if(c == arr.length-1) return -1;
@@ -25,5 +26,23 @@ public class RecLinearSearch {
             return list;
         }
         return helper2(arr,t,++c,list);
+    }
+
+    //Without taking ArrayList as argument
+
+    static ArrayList findAllIndex(int[] arr,int t,int c) {
+        ArrayList<Integer> list = new ArrayList<>();
+
+        if(arr.length == c) {
+            return list;
+        }
+        //Every function call it will contain answer of that function only
+        if(arr[c] == t) {
+            list.add(c);
+        }
+        ArrayList<Integer> ans = findAllIndex(arr,t,++c);
+
+        list.addAll(ans);
+        return list;
     }
 }
