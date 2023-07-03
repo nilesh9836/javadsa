@@ -4,6 +4,7 @@ public class BinarySearch {
     public static void main(String[] args) {
         //Binary search for rotated array using recursion
         int[] arr = new int[]{5,6,1,2,3,4};
+
         System.out.println(binarySearch(arr,6,0, arr.length-1));
     }
 
