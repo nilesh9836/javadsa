@@ -5200,14 +5200,29 @@ export default {
       p5.rectMode(p5.CENTER);
     },
 
-    async draw(p5) {
-      if (this.mapImage == null) return;
-      p5.push();
-      let ctx = p5;
-      // Interpolate between current zoom level and target zoom level
-      //this.zoom = p5.lerp(this.zoom, this.targetZoom, 0.1);
-      if (this.saveBool) {
-        // this.store.savingBool
+    
+async draw(p5) {
+    if (this.mapImage == null) return;
+    p5.push();
+    let ctx = this.setupContext(p5);
+    this.applyZoom(p5);
+
+    this.drawMapImage(ctx);
+    this.drawEdges(ctx);
+    this.drawShapes(ctx);
+    
+    this.drawGuideLine(p5);
+    this.drawGrid(p5);
+    this.handleSaving(ctx);
+
+    this.drawHandle(p5);
+    p5.pop();
+    this.drawScrollBar(p5);
+},
+
+setupContext(p5) {
+    let ctx = p5;
+    if (this.saveBool) {
         p5.noSmooth();
         ctx = this.p5.createGraphics(this.mapImage.width, this.mapImage.height);
         ctx.pixelDensity(1);
@@ -5215,365 +5230,96 @@ export default {
         ctx.imageMode(ctx.CENTER);
         ctx.scale(1, -1);
         ctx.translate(0, -parseInt(ctx.height));
-      } else {
+    } else {
         ctx.scale(this.zoom, -this.zoom);
         ctx.translate(
-          -this.viewPort.x / this.zoom,
-          (-ctx.height - this.viewPort.y + SCROLL_BAR_SIZE) / this.zoom
+            -this.viewPort.x / this.zoom,
+            (-ctx.height - this.viewPort.y + SCROLL_BAR_SIZE) / this.zoom
         );
-      }
-      if (this.zoomFromMouse) {
+    }
+    return ctx;
+},
+
+applyZoom(p5) {
+    if (this.zoomFromMouse) {
         p5.translate(this.mx, this.my);
         p5.scale(this.sf);
         p5.translate(-this.mx, -this.my);
-        // // Update the zoom level
-        // this.zoom *= this.sf;
-        // console.log("zoom uno", this.zoom);
-      }
+    }
+},
 
-      this.drawMapImage(ctx); //ctx as arg
+drawEdges(ctx) {
+    if (!this.edgeCache) {
+        this.edgeCache = new Map();
+    }
 
-      // For Saving Shapes
-      if (!this.saveBool) {
+    if (!this.edgeCache.has('edges')) {
+        this.edgeCache.set('edges', []);
+        this.edgeMap.forEach((edgeInfo, edge) => {
+            ctx.line(edgeInfo.pos[0].x, edgeInfo.pos[0].y, edgeInfo.pos[1].x, edgeInfo.pos[1].y);
+            this.edgeCache.get('edges').push([edgeInfo.pos[0].x, edgeInfo.pos[0].y, edgeInfo.pos[1].x, edgeInfo.pos[1].y]);
+        });
+    } else {
+        this.edgeCache.get('edges').forEach(edge => {
+            ctx.line(edge[0], edge[1], edge[2], edge[3]);
+        });
+    }
+},
+
+drawShapes(ctx) {
+    if (!this.saveBool) {
         if (this.store.shapeChecked) {
-          for (let shape of this.arrShape) {
-            this.drawShape(ctx, shape);
-          }
+            for (let shape of this.arrShape) {
+                this.drawShape(ctx, shape);
+            }
         }
         if (this.drawingShape != null) {
-          this.drawShape(ctx, this.drawingShape);
+            this.drawShape(ctx, this.drawingShape);
         }
-      } else {
-        let _ctx = this.p5.createGraphics(
-          this.mapImage.width,
-          this.mapImage.height
-        );
+    } else {
+        let _ctx = this.p5.createGraphics(this.mapImage.width, this.mapImage.height);
         _ctx.pixelDensity(1);
         _ctx.rectMode(_ctx.CENTER);
         _ctx.imageMode(_ctx.CENTER);
-
         if (!this.mergeImg) {
-          _ctx.scale(1, -1);
-          _ctx.translate(0, -parseInt(_ctx.height));
+            _ctx.scale(1, -1);
+            _ctx.translate(0, -parseInt(_ctx.height));
         }
-
         if (this.store.shapeChecked) {
-          for (let shape of this.arrShape) {
-            this.drawShape(_ctx, shape, false);
-          }
-        }
-
-        let colors = [];
-        for (let shape of this.arrShape) {
-          if (!colors.includes(shape.color.toLowerCase()))
-            colors.push(shape.color.toLowerCase());
-        }
-        _ctx.loadPixels();
-        ctx.loadPixels();
-        for (let i = 0; i < _ctx.pixels.length; i += 4) {
-          if (_ctx.pixels[i + 3] === 0) continue;
-
-          if (
-            (!this.savingShape &&
-              ctx.pixels[i] == 255 &&
-              ctx.pixels[i + 1] == 255 &&
-              ctx.pixels[i + 2] == 255) ||
-            this.savingShape
-          ) {
-            if (_ctx.pixels[i] != 0 && _ctx.pixels[i] != 255) continue;
-            if (
-              _ctx.pixels[i + 1] != 0 &&
-              _ctx.pixels[i + 1] != 165 &&
-              _ctx.pixels[i + 1] != 255
-            )
-              continue;
-            if (_ctx.pixels[i + 2] != 0 && _ctx.pixels[i + 2] != 255) continue;
-
-            for (let j = 0; j < 3; j++) {
-              ctx.pixels[i + j] = _ctx.pixels[i + j];
+            for (let shape of this.arrShape) {
+                this.drawShape(_ctx, shape, false);
             }
-            ctx.pixels[i + 3] = 255;
-          }
         }
-        ctx.updatePixels();
-        this.shapeContext = _ctx;
-      }
+    }
+},
 
-      // For Nodes & POI
-      if (!this.saveBool) {
-        for (let node of this.arrNode) {
-          this.drawEdge(p5, node);
-        }
-        if (
-          this.subMenuSelection === "edgeSetting" ||
-          this.store.edgeHighlightFlag //based on the highligh Flag drawHighlightEdge function run
-        ) {
-          if (this.store.optionChecked) this.store.drawer = true;
-        }
-        if (
-          this.currentSelectedEdgeGroup !== null &&
-          this.currentSelectedEdgeGroup !== undefined &&
-          !this.store.hideCurrentEdgeGroup &&
-          !this.store.updateSelectedEdgeGroup
-        ) {
-          for (let edge of this.currentSelectedEdgeGroup) {
-            // if(typeof(edge) !== 'string')
-            this.drawHighlightEdge(p5, edge, true);
-          }
-        }
-        if (
-          this.selectedEdgesFormatted.size !== 0 &&
-          !this.store.updateSelectedEdgeGroup
-        ) {
-          for (let edge of this.selectedEdgesFormatted) {
-            this.drawHighlightEdge(p5, edge, false);
-          }
-        }
-
-        for (let node of this.arrNode) {
-          if (this.store.nodeChecked) {
-            this.drawNode(p5, node);
-          }
-        }
-        if (this.tempArrPoi.length) this.arrPoi.push(this.tempArrPoi[0]);
-
-        this.arrPoi = this.removeDuplicates(this.arrPoi, "cpId");
-
-        for (let poi of this.arrPoi) {
-          if (this.store.POIChecked) {
-            this.drawPoi(p5, poi);
-            let gid = poi.attributes.gid;
-            let order = poi.attributes.order;
-
-            // If this is the first time we see this gid, initialize the max order value to the POI's order
-            if (gid) {
-              if (!(gid in this.maxOrderValues)) {
-                this.maxOrderValues[gid] = order;
-              } else {
-                // If we've seen this gid before, update the max order value if necessary
-                this.maxOrderValues[gid] = Math.max(
-                  this.maxOrderValues[gid],
-                  order
-                );
-              }
-            }
-          }
-        }
-        this.highlightPoi90(p5);
-        for (const poiArr of this.elevatorPoi) {
-          for (const [index, poi] of poiArr.entries()) {
-            if (this.store.POIChecked) {
-              this.drawPoi(p5, poi, index == 0);
-            }
-          }
-        }
-
-        if (this.store.elevatorMode) {
-          for (const rotate of this.rotateArray) {
-            this.drawRotate(p5, rotate);
-          }
-        }
-      }
-
-      for (let node of this.arrAutoNode) {
-        this.drawNode(p5, node);
-      }
-      //Multiple POI draw
-      for (let poi of this.arrAutoPoi) {
-        this.drawPoi(p5, poi);
-      }
-
-      //----------------------------------------------------------
-
-      if (this.subMenuSelection === "copyPoi") {
-        this.copyPoi();
-        this.$emit("backToMenuSelect");
-      }
-      if (["menuPencil"].includes(this.subMenuSelection)) {
-        let result = this.ctrlClickFun();
-        if (result === "exit") return;
-        const rectCenterX =
-          Math.round((this.viewPort.x + p5.mouseX) / this.zoom) +
-          this.pencilSize / 2;
-        const rectCenterY =
-          Math.round(
-            (this.viewPort.y - SCROLL_BAR_SIZE + p5.height - p5.mouseY) /
-              this.zoom
-          ) +
-          this.pencilSize / 2;
-        let isScroll = !(
-          !this.pointInsideRect(
-            this.p5.mouseX,
-            this.p5.mouseY,
-            this.scrollBar.horizontal.offset + 42,
-            this.p5.height - SCROLL_BAR_SIZE - 55,
-            this.scrollBar.horizontal.size - 85,
-            SCROLL_BAR_SIZE
-          ) &&
-          !this.pointInsideRect(
-            this.p5.mouseX,
-            this.p5.height - this.p5.mouseY,
-            this.p5.width - SCROLL_BAR_SIZE - 5,
-            this.scrollBar.vertical.offset + SCROLL_BAR_SIZE,
-            SCROLL_BAR_SIZE,
-            this.scrollBar.vertical.size
-          )
-        );
-        console.log(
-          "Center of the rectangle (x, y):",
-          rectCenterX,
-          rectCenterY
-        );
-        //this.p5.cursor(this.p5.CROSS,rectCenterX+0.5,rectCenterY+0.5);
-        if (!isScroll) p5.noCursor();
-        else this.p5.cursor();
-        p5.strokeWeight(1 / this.zoom);
-        p5.noFill();
-        p5.stroke("#A50034");
-        console.log(
-          "boundingRect (x,y)",
-          Math.round((this.viewPort.x + p5.mouseX) / this.zoom),
-          Math.round(
-            (this.viewPort.y - SCROLL_BAR_SIZE + p5.height - p5.mouseY) /
-              this.zoom
-          )
-        );
-        console.log("isScroll", isScroll);
-        console.log(
-          "Rectangle coordinate",
-          Math.round((this.viewPort.x + p5.mouseX) / this.zoom) + 0.5,
-          Math.round(
-            (this.viewPort.y - SCROLL_BAR_SIZE + p5.height - p5.mouseY) /
-              this.zoom
-          ) + 0.5
-        );
-        let offset = this.pencilSize % 2 === 0 ? 0 : 0.5;
-        if (this.isLineDrawing) {
-          // Check if 'Shift' and 'Z' keys are being held down
-          if (p5.keyIsDown(p5.SHIFT) && p5.keyIsDown(p5.ALT)) {
-            // 90 is the ASCII value for 'Z'
-            // Store the original position
-            if (!this.originalPosition) {
-              this.originalPosition = {
-                x: this.guideLine.x2,
-                y: this.guideLine.y2,
-              };
-            }
-            let angle = Math.atan2(
-              this.guideLine.y2 - this.guideLine.y,
-              this.guideLine.x2 - this.guideLine.x
-            );
-
-            // Convert the angle to degrees
-            angle = p5.degrees(angle);
-
-            // Round the angle to the nearest 15 degrees
-            angle = p5.round(angle / 15) * 15;
-
-            // Convert the angle back to radians
-            angle = p5.radians(angle);
-
-            // Calculate the new mouse position
-            let length = p5.dist(
-              this.guideLine.x,
-              this.guideLine.y,
-              this.guideLine.x2,
-              this.guideLine.y2
-            );
-            let newX = this.guideLine.x + length * Math.cos(angle);
-            let newY = this.guideLine.y + length * Math.sin(angle);
-
-            // Clear the canvas before drawing the new line
-            //p5.background(255); // Assuming the background is white
-
-            // Draw a line from the previous mouse position to the new position
-            p5.line(this.guideLine.x, this.guideLine.y, newX, newY);
-            this.tempGuideline = {
-              x: newX,
-              y: newY,
-              x2: newX,
-              y2: newY,
-              drawMeter: true,
-            };
-            // Update the previous mouse position
-            this.guideLine.x2 = newX;
-            this.guideLine.y2 = newY;
-          } else if (this.originalPosition) {
-            // If any key is released, return to the original position
-            this.guideLine.x2 = this.originalPosition.x;
-            this.guideLine.y2 = this.originalPosition.y;
-            this.originalPosition = null;
-          } else {
-            let xV = (this.viewPort.x + p5.mouseX) / this.zoom;
-            let yV =
-              (this.viewPort.y - SCROLL_BAR_SIZE + p5.height - p5.mouseY) /
-              this.zoom;
-            p5.rect(xV, yV, this.pencilSize, this.pencilSize);
-          }
-        } else if (!this.store.objectFlag && !isScroll)
-          p5.rect(
-            Math.round((this.viewPort.x + p5.mouseX) / this.zoom) - offset,
-            Math.round(
-              (this.viewPort.y - SCROLL_BAR_SIZE + p5.height - p5.mouseY) /
-                this.zoom
-            ) + offset,
-            this.pencilSize,
-            this.pencilSize
-          );
-      }
-      this.drawGuideLine(p5);
-      this.drawGrid(p5);
-      this.imageContextForValidation = this.imageContext;
-
-      //---------------------H CODE STARTS-----------------------------
-      if (this.shapeContext != undefined && this.mergeImg) {
-        //this.store.toggleStopSaving(true);
+async handleSaving(ctx) {
+    if (this.shapeContext != undefined && this.mergeImg) {
         this.stopSaving = true;
-        console.log("test");
         this.shapeContext = undefined;
-      }
-      if (this.saveBool) {
+    }
+    if (this.saveBool) {
         if (!this.savingShape && !this.mergeImg) {
-          this.final_ctx = ctx;
-
-          this.saveOutputImage2(ctx);
+            this.final_ctx = ctx;
+            this.saveOutputImage2(ctx);
         } else if (this.savingShape) {
-          this.saveShapeImage2(ctx);
+            this.saveShapeImage2(ctx);
         } else if (this.mergeImg) {
-          if (!this.stopSaving) {
-            this.saveCombinedImage2(this.final_ctx);
-            /*
-            mergeImages([
-              "../../B_KQ_F8_static.png",
-              "../../B_KQ_F8.png",
-              "../../B_KQ_F8_slam.png",
-            ]).then((b64) => this.saveCombinedImage2(b64));
-            */
-          }
-
-          //this.store.toggleMergeImg(false);
-          this.mergeImg = false;
-          console.log("test");
-          //this.store.setSavingBool(false);
-          this.saveBool = false;
-          console.log("test");
-          this.store.saveMap = false;
-
-          // Here get the Upload URL--------------------------------------------
-
-          let authToken = await getAuthToken(this.store);
-          console.log("authToken before url req-->>", authToken);
-          this.uploadURL = await this.getUploadURL(authToken);
-          this.uploadMapImages(this.uploadURL);
-
-          uploadPoiFile(this.store, this.store.saveMapItem.id);
+            if (!this.stopSaving) {
+                this.saveCombinedImage2(this.final_ctx);
+            }
+            this.mergeImg = false;
+            this.saveBool = false;
+            this.store.saveMap = false;
+            let authToken = await getAuthToken(this.store);
+            this.uploadURL = await this.getUploadURL(authToken);
+            this.uploadMapImages(this.uploadURL);
+            uploadPoiFile(this.store, this.store.saveMapItem.id);
         }
-      }
-      //---------------------H CODE ENDS-----------------------------
-      this.drawHandle(p5);
-      p5.pop();
-      this.drawScrollBar(p5);
-    },
+    }
+},
+
+      
 
     getScrollbarAtMouse() {
       if (this.p5 === null) return;
@@ -7910,3 +7656,4 @@ export default {
   background-color: green;
 }
 </style>
+
