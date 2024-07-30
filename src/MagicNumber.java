@@ -5200,29 +5200,36 @@ export default {
       p5.rectMode(p5.CENTER);
     },
 
-    
-async draw(p5) {
-    if (this.mapImage == null) return;
-    p5.push();
-    let ctx = this.setupContext(p5);
-    this.applyZoom(p5);
+    async draw(p5) {
+      if (this.mapImage == null) return;
+      p5.push();
+      let ctx = this.setupContext(p5);
+      this.applyZoom(p5);
 
-    this.drawMapImage(ctx);
-    this.drawEdges(ctx);
-    this.drawShapes(ctx);
-    
-    this.drawGuideLine(p5);
-    this.drawGrid(p5);
-    this.handleSaving(ctx);
+      this.drawMapImage(ctx);
+      for (let node of this.arrNode) {
+        if (this.store.nodeChecked) {
+          this.drawNode(p5, node);
+        }
+      }
+      for (let node of this.arrNode) {
+          this.drawEdge(p5, node);
+        }
+      //this.drawEdges(ctx);
+      this.drawShapes(ctx);
 
-    this.drawHandle(p5);
-    p5.pop();
-    this.drawScrollBar(p5);
-},
+      this.drawGuideLine(p5);
+      this.drawGrid(p5);
+      this.handleSaving(ctx);
 
-setupContext(p5) {
-    let ctx = p5;
-    if (this.saveBool) {
+      this.drawHandle(p5);
+      p5.pop();
+      this.drawScrollBar(p5);
+    },
+
+    setupContext(p5) {
+      let ctx = p5;
+      if (this.saveBool) {
         p5.noSmooth();
         ctx = this.p5.createGraphics(this.mapImage.width, this.mapImage.height);
         ctx.pixelDensity(1);
@@ -5230,96 +5237,109 @@ setupContext(p5) {
         ctx.imageMode(ctx.CENTER);
         ctx.scale(1, -1);
         ctx.translate(0, -parseInt(ctx.height));
-    } else {
+      } else {
         ctx.scale(this.zoom, -this.zoom);
         ctx.translate(
-            -this.viewPort.x / this.zoom,
-            (-ctx.height - this.viewPort.y + SCROLL_BAR_SIZE) / this.zoom
+          -this.viewPort.x / this.zoom,
+          (-ctx.height - this.viewPort.y + SCROLL_BAR_SIZE) / this.zoom
         );
-    }
-    return ctx;
-},
+      }
+      return ctx;
+    },
 
-applyZoom(p5) {
-    if (this.zoomFromMouse) {
+    applyZoom(p5) {
+      if (this.zoomFromMouse) {
         p5.translate(this.mx, this.my);
         p5.scale(this.sf);
         p5.translate(-this.mx, -this.my);
-    }
-},
+      }
+    },
 
-drawEdges(ctx) {
-    if (!this.edgeCache) {
+    drawEdges(ctx) {
+      if (!this.edgeCache) {
         this.edgeCache = new Map();
-    }
+      }
 
-    if (!this.edgeCache.has('edges')) {
-        this.edgeCache.set('edges', []);
+      if (!this.edgeCache.has("edges")) {
+        this.edgeCache.set("edges", []);
         this.edgeMap.forEach((edgeInfo, edge) => {
-            ctx.line(edgeInfo.pos[0].x, edgeInfo.pos[0].y, edgeInfo.pos[1].x, edgeInfo.pos[1].y);
-            this.edgeCache.get('edges').push([edgeInfo.pos[0].x, edgeInfo.pos[0].y, edgeInfo.pos[1].x, edgeInfo.pos[1].y]);
+          ctx.line(
+            edgeInfo.pos[0].x,
+            edgeInfo.pos[0].y,
+            edgeInfo.pos[1].x,
+            edgeInfo.pos[1].y
+          );
+          this.edgeCache
+            .get("edges")
+            .push([
+              edgeInfo.pos[0].x,
+              edgeInfo.pos[0].y,
+              edgeInfo.pos[1].x,
+              edgeInfo.pos[1].y,
+            ]);
         });
-    } else {
-        this.edgeCache.get('edges').forEach(edge => {
-            ctx.line(edge[0], edge[1], edge[2], edge[3]);
+      } else {
+        this.edgeCache.get("edges").forEach((edge) => {
+          ctx.line(edge[0], edge[1], edge[2], edge[3]);
         });
-    }
-},
+      }
+    },
 
-drawShapes(ctx) {
-    if (!this.saveBool) {
+    drawShapes(ctx) {
+      if (!this.saveBool) {
         if (this.store.shapeChecked) {
-            for (let shape of this.arrShape) {
-                this.drawShape(ctx, shape);
-            }
+          for (let shape of this.arrShape) {
+            this.drawShape(ctx, shape);
+          }
         }
         if (this.drawingShape != null) {
-            this.drawShape(ctx, this.drawingShape);
+          this.drawShape(ctx, this.drawingShape);
         }
-    } else {
-        let _ctx = this.p5.createGraphics(this.mapImage.width, this.mapImage.height);
+      } else {
+        let _ctx = this.p5.createGraphics(
+          this.mapImage.width,
+          this.mapImage.height
+        );
         _ctx.pixelDensity(1);
         _ctx.rectMode(_ctx.CENTER);
         _ctx.imageMode(_ctx.CENTER);
         if (!this.mergeImg) {
-            _ctx.scale(1, -1);
-            _ctx.translate(0, -parseInt(_ctx.height));
+          _ctx.scale(1, -1);
+          _ctx.translate(0, -parseInt(_ctx.height));
         }
         if (this.store.shapeChecked) {
-            for (let shape of this.arrShape) {
-                this.drawShape(_ctx, shape, false);
-            }
+          for (let shape of this.arrShape) {
+            this.drawShape(_ctx, shape, false);
+          }
         }
-    }
-},
+      }
+    },
 
-async handleSaving(ctx) {
-    if (this.shapeContext != undefined && this.mergeImg) {
+    async handleSaving(ctx) {
+      if (this.shapeContext != undefined && this.mergeImg) {
         this.stopSaving = true;
         this.shapeContext = undefined;
-    }
-    if (this.saveBool) {
+      }
+      if (this.saveBool) {
         if (!this.savingShape && !this.mergeImg) {
-            this.final_ctx = ctx;
-            this.saveOutputImage2(ctx);
+          this.final_ctx = ctx;
+          this.saveOutputImage2(ctx);
         } else if (this.savingShape) {
-            this.saveShapeImage2(ctx);
+          this.saveShapeImage2(ctx);
         } else if (this.mergeImg) {
-            if (!this.stopSaving) {
-                this.saveCombinedImage2(this.final_ctx);
-            }
-            this.mergeImg = false;
-            this.saveBool = false;
-            this.store.saveMap = false;
-            let authToken = await getAuthToken(this.store);
-            this.uploadURL = await this.getUploadURL(authToken);
-            this.uploadMapImages(this.uploadURL);
-            uploadPoiFile(this.store, this.store.saveMapItem.id);
+          if (!this.stopSaving) {
+            this.saveCombinedImage2(this.final_ctx);
+          }
+          this.mergeImg = false;
+          this.saveBool = false;
+          this.store.saveMap = false;
+          let authToken = await getAuthToken(this.store);
+          this.uploadURL = await this.getUploadURL(authToken);
+          this.uploadMapImages(this.uploadURL);
+          uploadPoiFile(this.store, this.store.saveMapItem.id);
         }
-    }
-},
-
-      
+      }
+    },
 
     getScrollbarAtMouse() {
       if (this.p5 === null) return;
@@ -7656,4 +7676,3 @@ async handleSaving(ctx) {
   background-color: green;
 }
 </style>
-
